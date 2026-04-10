@@ -1,5 +1,5 @@
 streamlit
-crewai[tools]
-langchain-openai
+crewai
+langchain-groq
+python-dotenv
 pysqlite3-binary
-pydantic<3.0.0
