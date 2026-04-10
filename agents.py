@@ -1,25 +1,20 @@
 import os
 from crewai import Agent, Task, Crew, Process
-from langchain_groq import ChatGroq
 
 def run_assessment(upi_data, bill_data, api_key):
-    # Your specific Groq Key
-    groq_key = "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"
+    # 1. Set the API Key in the environment so CrewAI can find it
+    os.environ["GROQ_API_KEY"] = "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"
     
-    # Explicitly define the LLM object
-    # This avoids the "Native Provider" error because we are passing a pre-configured object
-    llm = ChatGroq(
-        temperature=0.1,
-        groq_api_key=groq_key,
-        model_name="llama3-70b-8192"
-    )
+    # 2. Use the string identifier for Groq
+    # This avoids the Pydantic "ChatGroq" validation error
+    model_id = "groq/llama3-70b-8192"
 
     # Agent 1: The Transaction Expert
     tx_agent = Agent(
         role='UPI Transaction Specialist',
         goal='Analyze financial stability from raw UPI logs.',
         backstory='Expert in Indian digital payment patterns.',
-        llm=llm, # Pass the object directly
+        llm=model_id, 
         verbose=True,
         allow_delegation=False
     )
@@ -29,7 +24,7 @@ def run_assessment(upi_data, bill_data, api_key):
         role='Utility Analyst',
         goal='Assess payment reliability via utility bills.',
         backstory='Focuses on punctuality as a sign of credit character.',
-        llm=llm,
+        llm=model_id,
         verbose=True,
         allow_delegation=False
     )
@@ -39,7 +34,7 @@ def run_assessment(upi_data, bill_data, api_key):
         role='Chief Credit Underwriter',
         goal='Generate a final score and reasoning trace.',
         backstory='Reconciles data into a final decision.',
-        llm=llm,
+        llm=model_id,
         verbose=True
     )
 
