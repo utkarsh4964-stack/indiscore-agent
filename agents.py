@@ -1,15 +1,12 @@
-%%writefile agents.py
 import os
 from crewai import Agent, Task, Crew, Process
 from langchain_groq import ChatGroq
 
 def run_assessment(upi_data, bill_data, api_key):
-    # We ignore the api_key passed from the UI and use your Groq key directly
-    # Or better yet: use the key from the UI if you decide to paste the Groq key there!
-    
+    # Directly using the Groq Key you provided
     groq_key = "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"
     
-    # Initialize the Groq LLM (Llama 3 70B is excellent for reasoning)
+    # Initialize the Groq LLM
     llm = ChatGroq(
         temperature=0.1,
         groq_api_key=groq_key,
@@ -55,4 +52,6 @@ def run_assessment(upi_data, bill_data, api_key):
         process=Process.sequential
     )
     
-    return str(crew.kickoff())
+    # Convert result to string to ensure it returns properly to Streamlit
+    result = crew.kickoff()
+    return str(result)
