@@ -2,12 +2,11 @@ import os
 from crewai import Agent, Task, Crew, Process
 
 def run_assessment(upi_data, bill_data, api_key):
-    # 1. Set the API Key in the environment so CrewAI can find it
     os.environ["GROQ_API_KEY"] = "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"
     
-    # 2. Use the string identifier for Groq
-    # This avoids the Pydantic "ChatGroq" validation error
-    model_id = "groq/llama3-70b-8192"
+    # NEW MODEL ID FOR 2026
+    # llama-3.3-70b-versatile is the recommended replacement
+    model_id = "groq/llama-3.3-70b-versatile"
 
     # Agent 1: The Transaction Expert
     tx_agent = Agent(
