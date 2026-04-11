@@ -1,26 +1,42 @@
+# --- STEP 1: SQLITE VERSION HACK (MUST BE FIRST) ---
+try:
+    __import__('pysqlite3')
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass # Fallback for local environments
+
+import streamlit as st
 import subprocess
 import sys
+import os
+import re
 
-# --- STEP 1: BOOTSTRAP FOR PYTHON 3.12 COMPATIBILITY ---
-# This must run before 'from agents import ...' or any crewai imports
+# --- STEP 2: FIX FOR Python 3.12 / CrewAI Telemetry ---
+# We manually inject 'pkg_resources' into sys.modules so CrewAI doesn't crash
 try:
     import pkg_resources
 except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "setuptools"])
-    import pkg_resources
+    try:
+        from importlib import metadata
+        # Create a mock object to satisfy CrewAI's version checks
+        class MockPkgResources:
+            def get_distribution(self, name):
+                class Dist:
+                    version = "0.0.0"
+                return Dist()
+        sys.modules['pkg_resources'] = MockPkgResources()
+    except Exception:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "setuptools"])
 
-# --- STEP 2: SQLITE VERSION HACK ---
-# Required because Streamlit Cloud uses an outdated SQLite version incompatible with ChromaDB
-__import__('pysqlite3')
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+# Now safe to import your local files
+try:
+    from agents import run_assessment
+except ImportError as e:
+    st.error(f"Failed to import agents.py: {e}")
 
-import streamlit as st
-import re
-import os
-from agents import run_assessment
-
-# --- STEP 3: UI CONFIGURATION ---
-st.set_page_config(page_title="IndiScore Pro | AI Underwriting", page_icon="🏦", layout="wide")
+# --- STEP 3: UI CONFIG ---
+st.set_page_config(page_title="IndiScore Pro", page_icon="🏦", layout="wide")
 
 # Initialize Session State
 if 'audit_report' not in st.session_state:
@@ -30,79 +46,52 @@ if 'final_score' not in st.session_state:
 if 'status_label' not in st.session_state:
     st.session_state.status_label = "PENDING"
 
-# --- STEP 4: APP LAYOUT ---
 st.title("🏦 IndiScore Pro")
-st.caption("Multi-Agent Credit Intelligence Engine powered by Llama 3.3 & CrewAI")
+st.caption("Agentic Credit Intelligence | Utkarsh Sharma")
 st.markdown("---")
 
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Configuration")
-    # Priority: User Input > Environment Variable
-    api_key = st.text_input("Groq API Key", type="password", help="Enter your Groq Cloud API Key")
+    api_key = st.text_input("Groq API Key", type="password")
     st.divider()
-    st.markdown("### How it works")
-    st.info("""
-    1. **Data Integrity Agent**: Checks for fraud/circular trading.
-    2. **Risk Auditor**: Analyzes behavioral red flags (gambling, defaults).
-    3. **Chief Underwriter**: Synthesizes a final score and status.
-    """)
+    st.write("System Status: **Active**" if api_key else "System Status: **Waiting for Key**")
 
-col_left, col_right = st.columns([1, 1])
+# --- MAIN INTERFACE ---
+col1, col2 = st.columns([1, 1])
 
-with col_left:
-    st.subheader("📥 Transaction Feed")
-    data_input = st.text_area(
-        "Paste Raw Logs or Bank Statement Text:", 
-        height=350,
-        placeholder="Example: 05-04-2026 Received ₹75,000 from GOOGLE INDIA..."
-    )
+with col1:
+    st.subheader("📥 Transaction Data")
+    data_input = st.text_area("Paste logs here:", height=300)
     
-    if st.button("🚀 Run Agentic Audit", use_container_width=True):
+    if st.button("🚀 Execute Audit", use_container_width=True):
         if not data_input:
-            st.error("Please provide transaction data.")
-        elif not api_key and not os.environ.get("GROQ_API_KEY"):
-            st.error("API Key missing! Please provide it in the sidebar.")
+            st.error("Missing data.")
+        elif not api_key:
+            st.error("Missing API Key.")
         else:
-            with st.status("Agents are debating your creditworthiness...", expanded=True) as status:
-                st.write("🕵️ Verifying transaction integrity...")
-                
-                # Execute the CrewAI logic
+            with st.status("Agents are analyzing...", expanded=True) as status:
                 try:
                     report = run_assessment(data_input, api_key)
                     st.session_state.audit_report = report
                     
-                    # Regex Extraction for Score and Status
+                    # Extraction
                     score_match = re.search(r'FINAL_SCORE:\s*(\d+)', report)
                     status_match = re.search(r'STATUS:\s*(\w+)', report)
                     
                     st.session_state.final_score = int(score_match.group(1)) if score_match else 600
                     st.session_state.status_label = status_match.group(1).upper() if status_match else "REVIEW"
                     
-                    status.update(label="Audit Complete!", state="complete", expanded=False)
+                    status.update(label="Complete!", state="complete", expanded=False)
                 except Exception as e:
-                    st.error(f"Audit failed: {e}")
-                    status.update(label="Audit Failed", state="error")
+                    st.error(f"Error: {e}")
 
-with col_right:
-    st.subheader("📊 Underwriter Output")
-    
+with col2:
+    st.subheader("📊 Results")
     if st.session_state.audit_report:
-        # Visualizing the Score
-        m_col1, m_col2 = st.columns(2)
-        m_col1.metric("IndiScore", st.session_state.final_score, delta_color="normal")
-        
-        status_text = st.session_state.status_label
-        if "APPROVED" in status_text:
-            m_col2.success(f"DECISION: {status_text}")
-        elif "REVIEW" in status_text:
-            m_col2.warning(f"DECISION: {status_text}")
-        else:
-            m_col2.error(f"DECISION: {status_text}")
-            
-        st.markdown("### Agent Reasoning Trace")
+        c1, c2 = st.columns(2)
+        c1.metric("Score", st.session_state.final_score)
+        c2.info(f"Status: {st.session_state.status_label}")
         st.markdown(st.session_state.audit_report)
     else:
-        st.info("Results will appear here once the audit is executed.")
-
-st.markdown("---")
-st.caption("Built for HKU Summer Institute & MLH Fellowship Applications | Developed by Utkarsh Sharma")
+        st.info("Awaiting execution...")
