@@ -1,5 +1,6 @@
 streamlit
 crewai
-litellm
-pysqlite3-binary
+pypdf
 plotly
+langchain_groq
+python-dotenv
