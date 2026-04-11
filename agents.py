@@ -2,54 +2,55 @@ import os
 from crewai import Agent, Task, Crew, Process, LLM
 
 def run_assessment(upi_data, bill_data, api_key):
-    # Use provided key or fallback to environment
     os.environ["GROQ_API_KEY"] = api_key if api_key else os.environ.get("GROQ_API_KEY")
-    
-    # 2026 Production Model
     my_llm = LLM(model="groq/llama-3.3-70b-versatile")
 
+    # AGENT 1: The Cashflow Expert
     tx_agent = Agent(
-        role='UPI Transaction Specialist',
-        goal='Analyze financial stability from raw UPI logs.',
-        backstory='Expert in Indian digital payment patterns. You look for consistent income and rent markers.',
-        llm=my_llm, 
-        verbose=True,
-        allow_delegation=False
+        role='Transaction Integrity Specialist',
+        goal='Identify income consistency and essential vs. discretionary spending.',
+        backstory='Expert at spotting "Salary" markers in UPI logs and calculating debt-to-income ratios.',
+        llm=my_llm, verbose=True
     )
 
+    # AGENT 2: The Reliability Expert
     util_agent = Agent(
-        role='Utility Analyst',
-        goal='Assess payment reliability via utility bills.',
-        backstory='Focuses on punctuality as a sign of financial character.',
-        llm=my_llm,
-        verbose=True,
-        allow_delegation=False
+        role='Behavioral Punctuality Analyst',
+        goal='Analyze utility bill history to determine "Character" and "Willingness to Pay".',
+        backstory='Looks for 12-month streaks of on-time payments as a proxy for financial discipline.',
+        llm=my_llm, verbose=True
     )
 
+    # AGENT 3: THE SKEPTIC (New for Hackathons)
+    risk_agent = Agent(
+        role='Anti-Fraud & Risk Auditor',
+        goal='Identify potential red flags, circular transactions, or signs of financial distress.',
+        backstory='Your job is to find reasons NOT to lend. Look for high-frequency low-value transfers or gambling markers.',
+        llm=my_llm, verbose=True
+    )
+
+    # AGENT 4: The Manager
     manager = Agent(
         role='Chief Credit Underwriter',
-        goal='Generate a final score (300-900) and reasoning trace.',
-        backstory='Reconciles data into a final, human-readable report.',
-        llm=my_llm,
-        verbose=True
+        goal='Synthesize agent reports into a final credit score and actionable roadmap.',
+        backstory='Final decision maker. Balances the optimism of the Cashflow agent with the caution of the Risk agent.',
+        llm=my_llm, verbose=True
     )
 
-    t1 = Task(description=f"Analyze UPI: {upi_data}", expected_output="Stability analysis.", agent=tx_agent)
-    t2 = Task(description=f"Analyze Bills: {bill_data}", expected_output="Reliability report.", agent=util_agent)
+    t1 = Task(description=f"Analyze UPI Stability: {upi_data}", expected_output="Cashflow Health Score (1-10)", agent=tx_agent)
+    t2 = Task(description=f"Analyze Bill Punctuality: {bill_data}", expected_output="Reliability Score (1-10)", agent=util_agent)
+    t3 = Task(description="Audit for Fraud or Risk markers in the provided data.", expected_output="Risk Flag Assessment.", agent=risk_agent)
     
-    # CRITICAL: Added explicit formatting instruction for the score
-    t3 = Task(
-        description="Summarize the findings. You MUST include a final score between 300 and 900. Format it exactly as 'FINAL_SCORE: XXX' at the very end.", 
-        expected_output="Markdown report ending with FINAL_SCORE: [number].", 
-        agent=manager, 
-        context=[t1, t2]
+    t4 = Task(
+        description="""Generate a FINAL report. 
+        1. Summarize reasoning from all agents.
+        2. Provide a 'Score Breakdown' (Stability, Reliability, Risk).
+        3. Provide 3 specific 'Improvement Steps'.
+        4. End with EXACTLY: 'FINAL_SCORE: XXX'""",
+        expected_output="Professional Underwriting Report with FINAL_SCORE tag.",
+        agent=manager,
+        context=[t1, t2, t3]
     )
 
-    crew = Crew(
-        agents=[tx_agent, util_agent, manager], 
-        tasks=[t1, t2, t3], 
-        process=Process.sequential
-    )
-    
-    result = crew.kickoff()
-    return str(result)
+    crew = Crew(agents=[tx_agent, util_agent, risk_agent, manager], tasks=[t1, t2, t3, t4], process=Process.sequential)
+    return str(crew.kickoff())
