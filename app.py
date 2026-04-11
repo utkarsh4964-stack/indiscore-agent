@@ -76,4 +76,4 @@ if st.button("🚀 Execute Multi-Agent Audit"):
         st.error("Please enter both transaction and bill data.")
 
 st.divider()
-st.caption("Built for Hackathon Demo | JSSATE Noida | Powered by Llama 3.3 70B")
+st.caption("Built by utkarsh sharma | JSSATE Noida | Powered by Llama 3.3 70B")
