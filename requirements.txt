@@ -1,8 +1,8 @@
+setuptools
+pysqlite3-binary
 streamlit
 crewai==0.28.8
 pypdf
 plotly
 langchain-groq
 python-dotenv
-setuptools
-pysqlite3-binary
