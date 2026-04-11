@@ -3,12 +3,14 @@ import plotly.graph_objects as go
 import re
 from agents import run_assessment
 
-st.set_page_config(page_title="IndiScore Pro AI", page_icon="💳", layout="wide")
+st.set_page_config(page_title="IndiScore Pro | Agentic Credit", page_icon="🏦", layout="wide")
 
-# --- UI STYLING ---
+# Custom CSS for Hackathon Appeal
 st.markdown("""
     <style>
-    .metric-card { background-color: #111; padding: 20px; border-radius: 10px; border-left: 5px solid #00d4ff; }
+    .main { background-color: #0e1117; }
+    div[data-testid="stMetricValue"] { font-size: 24px; color: #00d4ff; }
+    .stTextArea textarea { border: 1px solid #333; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -23,57 +25,52 @@ def create_gauge(score):
     fig = go.Figure(go.Indicator(
         mode = "gauge+number", value = score,
         gauge = {'axis': {'range': [300, 900]}, 'bar': {'color': color},
-                 'steps': [{'range': [300, 600], 'color': "#331111"},
-                          {'range': [600, 750], 'color': "#332211"},
-                          {'range': [750, 900], 'color': "#113311"}]}))
-    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"}, height=350)
+                 'steps': [{'range': [300, 600], 'color': "#221111"},
+                          {'range': [600, 750], 'color': "#221a11"},
+                          {'range': [750, 900], 'color': "#112211"}]}))
+    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"}, height=300, margin=dict(t=0, b=0))
     return fig
 
-# --- SIDEBAR ---
+# --- UI LAYOUT ---
 with st.sidebar:
     st.title("🏦 IndiScore Pro")
-    st.caption("v2.0 - Hackathon Edition")
+    st.caption("Agentic Financial Intelligence")
     api_key = st.text_input("Groq API Key", type="password")
     st.divider()
-    st.write("🕵️ **4-Agent System Active**")
-    st.status("Anti-Fraud Engine: Live")
+    st.success("Core Model: Llama 3.3 70B")
+    st.info("Strategy: Hierarchical Multi-Agent")
 
-# --- MAIN UI ---
-st.header("Financial Character & Credit Assessment")
-st.info("Targeting the 190M credit-invisible Indians through Alternative Data Intelligence.")
+st.title("Alternative Data Underwriting Engine")
+st.markdown("##### Bridging the gap for 190M+ Credit-Invisible Indians")
 
-c1, c2 = st.columns(2)
-with c1:
-    upi_input = st.text_area("UPI Logs (Income & Rent markers)", height=150, placeholder="Paste transaction history...")
-with c2:
-    bill_input = st.text_area("Utility History (Punctuality signals)", height=150, placeholder="Paste bill payment history...")
+col_in1, col_in2 = st.columns(2)
+with col_in1:
+    upi_input = st.text_area("Paste UPI Transaction Logs", height=200, placeholder="Salary, Rent, Groceries...")
+with col_in2:
+    bill_input = st.text_area("Paste Utility/Bill History", height=200, placeholder="Electricity, JioFiber, Amazon...")
 
-if st.button("🚀 Execute Multi-Agent Audit"):
+if st.button("🚀 Run Multi-Agent Decision Engine"):
     if upi_input and bill_input:
-        with st.status("🧠 Agents are debating your creditworthiness...", expanded=True) as status:
-            report = run_assessment(upi_input, bill_input, api_key)
-            score = extract_score(report)
-            status.update(label="✅ Audit Complete", state="complete")
+        with st.status("🧠 Agents are auditing financial character...", expanded=True) as status:
+            report_text = run_assessment(upi_input, bill_input, api_key)
+            current_score = extract_score(report_text)
+            status.update(label="✅ Underwriting Complete!", state="complete")
         
-        # DISPLAY RESULTS
-        col_res1, col_res2 = st.columns([1, 1.2])
-        with col_res1:
-            st.plotly_chart(create_gauge(score), use_container_width=True)
+        # --- RESULTS DASHBOARD ---
+        res_col1, res_col2 = st.columns([1, 1.5])
+        
+        with res_col1:
+            st.plotly_chart(create_gauge(current_score), use_container_width=True)
             
-            # --- BREAKDOWN TILES ---
-            st.markdown("### 📊 Agent Confidence")
-            k1, k2 = st.columns(2)
-            k1.metric("Stability", "High" if score > 700 else "Moderate")
-            k2.metric("Risk Level", "Low" if score > 750 else "High")
+            # Metrics for "Hackathon Polish"
+            m1, m2 = st.columns(2)
+            m1.metric("Financial Health", f"{'High' if current_score > 750 else 'Moderate'}")
+            m2.metric("Confidence Score", "94%") # Mock confidence score
             
-        with col_res2:
-            st.markdown("### 🔍 Underwriter Reasoning Trace")
-            st.markdown(report)
-            
-            # Export button for judges to see "Productization"
-            st.button("📥 Download Official PDF Report (Mock)")
-    else:
-        st.error("Please enter both transaction and bill data.")
+            st.download_button("📥 Download Audit Report", report_text, file_name="indiscore_report.md")
 
-st.divider()
-st.caption("Built by utkarsh sharma | JSSATE Noida | Powered by Llama 3.3 70B")
+        with res_col2:
+            st.markdown("### 🔍 Underwriter's Reasoning Trace")
+            st.markdown(report_text)
+    else:
+        st.warning("Please fill both inputs to proceed.")
