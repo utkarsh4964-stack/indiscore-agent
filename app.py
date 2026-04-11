@@ -1,7 +1,7 @@
 import streamlit as st
 import plotly.graph_objects as go
 import re
-from PyPDF2 import PdfReader # New requirement: pip install PyPDF2
+from pypdf import PdfReader # Updated from PyPDF2 to pypdf# New requirement: pip install PyPDF2
 from agents import run_assessment
 
 st.set_page_config(page_title="IndiScore Pro | Document AI", page_icon="🏦", layout="wide")
