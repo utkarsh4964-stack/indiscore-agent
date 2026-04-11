@@ -1,6 +1,7 @@
-streamlit
-crewai
-pypdf
-plotly
-langchain_groq
-python-dotenv
+streamlit>=1.31.0
+crewai>=0.28.0
+pypdf>=4.1.0
+plotly>=5.18.0
+langchain-groq>=0.1.0
+python-dotenv>=1.0.1
+re>=2.2.1
