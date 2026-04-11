@@ -1,97 +1,94 @@
-# --- STEP 1: SQLITE VERSION HACK (MUST BE FIRST) ---
-try:
-    __import__('pysqlite3')
-    import sys
-    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-except ImportError:
-    pass # Fallback for local environments
-
 import streamlit as st
-import subprocess
-import sys
-import os
+import plotly.graph_objects as go
 import re
+from pypdf import PdfReader # Updated from PyPDF2 to pypdf# New requirement: pip install PyPDF2
+from agents import run_assessment
 
-# --- STEP 2: FIX FOR Python 3.12 / CrewAI Telemetry ---
-# We manually inject 'pkg_resources' into sys.modules so CrewAI doesn't crash
-try:
-    import pkg_resources
-except ImportError:
+st.set_page_config(page_title="IndiScore Pro | Document AI", page_icon="🏦", layout="wide")
+
+# --- PDF EXTRACTION LOGIC ---
+def extract_text_from_pdf(pdf_file):
     try:
-        from importlib import metadata
-        # Create a mock object to satisfy CrewAI's version checks
-        class MockPkgResources:
-            def get_distribution(self, name):
-                class Dist:
-                    version = "0.0.0"
-                return Dist()
-        sys.modules['pkg_resources'] = MockPkgResources()
-    except Exception:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "setuptools"])
+        reader = PdfReader(pdf_file)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text()
+        return text
+    except Exception as e:
+        st.error(f"Error reading PDF: {e}")
+        return None
 
-# Now safe to import your local files
-try:
-    from agents import run_assessment
-except ImportError as e:
-    st.error(f"Failed to import agents.py: {e}")
+def extract_score(text):
+    match = re.search(r'FINAL_SCORE:\s*(\d{3})', text)
+    if match: return int(match.group(1))
+    scores = re.findall(r'\b([3-9]\d{2})\b', text)
+    return int(scores[-1]) if scores else 300
 
-# --- STEP 3: UI CONFIG ---
-st.set_page_config(page_title="IndiScore Pro", page_icon="🏦", layout="wide")
+def create_gauge(score):
+    color = "#ff4b4b" if score < 600 else "#ffa500" if score < 750 else "#00cc66"
+    fig = go.Figure(go.Indicator(
+        mode = "gauge+number", value = score,
+        gauge = {'axis': {'range': [300, 900]}, 'bar': {'color': color},
+                 'steps': [{'range': [300, 600], 'color': "#221111"},
+                          {'range': [600, 750], 'color': "#221a11"},
+                          {'range': [750, 900], 'color': "#112211"}]}))
+    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"}, height=300, margin=dict(t=0, b=0))
+    return fig
 
-# Initialize Session State
-if 'audit_report' not in st.session_state:
-    st.session_state.audit_report = None
-if 'final_score' not in st.session_state:
-    st.session_state.final_score = 0
-if 'status_label' not in st.session_state:
-    st.session_state.status_label = "PENDING"
-
-st.title("🏦 IndiScore Pro")
-st.caption("Agentic Credit Intelligence | Utkarsh Sharma")
-st.markdown("---")
-
-# --- SIDEBAR ---
+# --- UI LAYOUT ---
 with st.sidebar:
-    st.header("⚙️ Configuration")
+    st.title("🏦 IndiScore Pro")
+    st.caption("v2.5 - Document AI Active")
     api_key = st.text_input("Groq API Key", type="password")
     st.divider()
-    st.write("System Status: **Active**" if api_key else "System Status: **Waiting for Key**")
+    st.success("PDF Parser: Online")
+    st.info("Agent: Llama 3.3 70B")
 
-# --- MAIN INTERFACE ---
-col1, col2 = st.columns([1, 1])
+st.title("Agentic Credit Intelligence Engine")
+st.markdown("##### Bridging the gap for 190M+ Credit-Invisible Indians")
 
-with col1:
-    st.subheader("📥 Transaction Data")
-    data_input = st.text_area("Paste logs here:", height=300)
-    
-    if st.button("🚀 Execute Audit", use_container_width=True):
-        if not data_input:
-            st.error("Missing data.")
-        elif not api_key:
-            st.error("Missing API Key.")
-        else:
-            with st.status("Agents are analyzing...", expanded=True) as status:
-                try:
-                    report = run_assessment(data_input, api_key)
-                    st.session_state.audit_report = report
-                    
-                    # Extraction
-                    score_match = re.search(r'FINAL_SCORE:\s*(\d+)', report)
-                    status_match = re.search(r'STATUS:\s*(\w+)', report)
-                    
-                    st.session_state.final_score = int(score_match.group(1)) if score_match else 600
-                    st.session_state.status_label = status_match.group(1).upper() if status_match else "REVIEW"
-                    
-                    status.update(label="Complete!", state="complete", expanded=False)
-                except Exception as e:
-                    st.error(f"Error: {e}")
+# --- INPUT TABS ---
+tab1, tab2 = st.tabs(["📄 Upload Bank Statement (PDF)", "⌨️ Manual Entry"])
 
-with col2:
-    st.subheader("📊 Results")
-    if st.session_state.audit_report:
-        c1, c2 = st.columns(2)
-        c1.metric("Score", st.session_state.final_score)
-        c2.info(f"Status: {st.session_state.status_label}")
-        st.markdown(st.session_state.audit_report)
+with tab1:
+    uploaded_file = st.file_uploader("Upload your Bank Statement (PDF)", type="pdf")
+    if uploaded_file:
+        st.success("PDF Uploaded Successfully!")
+
+with tab2:
+    col_in1, col_in2 = st.columns(2)
+    with col_in1:
+        upi_manual = st.text_area("Paste UPI Logs", height=150)
+    with col_in2:
+        bill_manual = st.text_area("Paste Bill History", height=150)
+
+if st.button("🚀 Analyze Creditworthiness"):
+    final_upi_data = ""
+    final_bill_data = ""
+
+    # Logic to decide which input to use
+    if uploaded_file:
+        with st.spinner("Extracting data from PDF..."):
+            pdf_text = extract_text_from_pdf(uploaded_file)
+            final_upi_data = pdf_text
+            final_bill_data = "Data extracted from PDF. See transaction logs."
     else:
-        st.info("Awaiting execution...")
+        final_upi_data = upi_manual
+        final_bill_data = bill_manual
+
+    if final_upi_data:
+        with st.status("🧠 Agents are auditing financial character...", expanded=True) as status:
+            report_text = run_assessment(final_upi_data, final_bill_data, api_key)
+            current_score = extract_score(report_text)
+            status.update(label="✅ Underwriting Complete!", state="complete")
+        
+        # --- RESULTS ---
+        res_col1, res_col2 = st.columns([1, 1.5])
+        with res_col1:
+            st.plotly_chart(create_gauge(current_score), use_container_width=True)
+            st.metric("Risk Status", "Verified" if current_score > 700 else "High Risk")
+        with res_col2:
+            st.markdown("### 🔍 Underwriter Report")
+            st.markdown(report_text)
+    else:
+        st.warning("Please provide a PDF or manual data.")
