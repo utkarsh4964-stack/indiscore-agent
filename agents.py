@@ -2,68 +2,65 @@ import os
 from crewai import Agent, Task, Crew, Process, LLM
 
 def run_assessment(upi_data, bill_data, api_key=None):
-    # Use Streamlit secret if no manual key is provided
+    # Ensure API Key is set
     os.environ["GROQ_API_KEY"] = os.environ.get("GROQ_API_KEY")
     
-    # Improvement: Optimized LLM Config for Fintech logic
-    fast_llm = LLM(model="groq/llama-3.3-70b-versatile", temperature=0.1)
+    # STRATEGY: Use 8B for extraction (High Rate Limit) and 70B for reasoning (Lower Rate Limit)
+    worker_llm = LLM(model="groq/llama-3.1-8b-instant", temperature=0.1)
+    decision_llm = LLM(model="groq/llama-3.3-70b-versatile", temperature=0.1)
 
-    # --- AGENT IMPROVEMENTS ---
+    # --- AGENT DEFINITIONS ---
     tx_agent = Agent(
-        role='Financial Stability Auditor',
-        goal='Identify net income and stability from localized Indian transaction logs.',
-        backstory="""You are an expert in Indian UPI and banking narration. You recognize 
-        'Dudh', 'Kirana', 'Zomato Payout', and 'Rent' as valid financial markers. You 
-        calculate a net monthly surplus after essential expenses.""",
-        llm=fast_llm
+        role='Financial Data Extractor',
+        goal='Accurately extract income and spending from raw bank text.',
+        backstory='You are a high-speed data processor focused on identifying transaction types.',
+        llm=worker_llm, # Using 8B here
+        verbose=True
     )
 
     risk_agent = Agent(
-        role='Risk & Fraud Skeptic',
-        goal='Detect circular trading, gambling, and credit hunger patterns.',
-        backstory="""You protect the lender. You look for money moving in circles between 
-        friends to fake volume, payments to betting apps, and signs of 'Credit Hunger' 
-        like multiple late fees or small loan inquiries.""",
-        llm=fast_llm
+        role='Risk Specialist',
+        goal='Identify red flags like gambling or circular transfers.',
+        backstory='You look for high-risk behavioral patterns in financial data.',
+        llm=worker_llm, # Using 8B here
+        verbose=True
     )
 
-    # Improvement: New Agent for User Guidance
-    coach_agent = Agent(
-        role='Financial Health Coach',
-        goal='Create a 30-day action plan to improve the user score.',
-        backstory="""You are helpful and encouraging. You look at the weaknesses found by 
-        other agents and provide 3 specific steps to boost creditworthiness.""",
-        llm=fast_llm
+    underwriter = Agent(
+        role='Chief Underwriter',
+        goal='Provide the final 300-900 score and executive summary.',
+        backstory='You are the senior decision maker. You provide complex reasoning and guidance.',
+        llm=decision_llm, # Using 70B for the "Brain"
+        verbose=True
     )
 
-    # --- UPDATED TASKS ---
+    # --- TASK DEFINITIONS ---
     t1 = Task(
-        description=f"Analyze the raw transaction text: {upi_data[:8000]}", # Context capping
-        expected_output="A structured summary of income vs essential expenses.",
+        description=f"Analyze transaction logs: {upi_data[:6000]}", # Capping text to save tokens
+        expected_output="A structured summary of income and expenses.",
         agent=tx_agent
     )
 
     t2 = Task(
-        description="Search for gambling markers, circular patterns, or payment defaults.",
-        expected_output="A risk flag report with specific transaction examples.",
+        description="Check for gambling, late fees, or suspicious transfers in the data.",
+        expected_output="A bulleted list of risk findings.",
         agent=risk_agent
     )
 
     t3 = Task(
-        description="""Synthesize the final report. 
-        Format: 
-        1. Executive Summary 
-        2. Financial Health Score (1-10) 
+        description="""Synthesize the final credit report.
+        1. Executive Summary
+        2. Financial Health Score (1-10)
         3. Risk Assessment (1-10)
-        4. ACTION PLAN: 3 steps to increase score.
+        4. ACTION PLAN: 3 steps to boost score.
         5. FINAL_SCORE: [300-900]""",
-        expected_output="Markdown report ending with FINAL_SCORE: XXX",
-        agent=coach_agent, # Coach now handles the final synthesis for a better user tone
+        expected_output="Comprehensive Markdown report ending with FINAL_SCORE: XXX.",
+        agent=underwriter,
         context=[t1, t2]
     )
 
     crew = Crew(
-        agents=[tx_agent, risk_agent, coach_agent],
+        agents=[tx_agent, risk_agent, underwriter],
         tasks=[t1, t2, t3],
         process=Process.sequential
     )
