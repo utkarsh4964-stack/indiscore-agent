@@ -2,55 +2,61 @@ import os
 from crewai import Agent, Task, Crew, Process, LLM
 
 def run_assessment(upi_data, bill_data, api_key):
+    # API Configuration
     os.environ["GROQ_API_KEY"] = api_key if api_key else os.environ.get("GROQ_API_KEY")
     my_llm = LLM(model="groq/llama-3.3-70b-versatile")
 
-    # AGENT 1: The Cashflow Expert
+    # --- AGENT DEFINITIONS ---
     tx_agent = Agent(
-        role='Transaction Integrity Specialist',
-        goal='Identify income consistency and essential vs. discretionary spending.',
-        backstory='Expert at spotting "Salary" markers in UPI logs and calculating debt-to-income ratios.',
+        role='Financial Stability Auditor',
+        goal='Extract net income, rent-to-income ratio, and discretionary spending patterns.',
+        backstory='Expert in Indian UPI ecosystems. You identify salary, gig-payouts (Zomato/Swiggy), and recurring investments.',
         llm=my_llm, verbose=True
     )
 
-    # AGENT 2: The Reliability Expert
-    util_agent = Agent(
-        role='Behavioral Punctuality Analyst',
-        goal='Analyze utility bill history to determine "Character" and "Willingness to Pay".',
-        backstory='Looks for 12-month streaks of on-time payments as a proxy for financial discipline.',
-        llm=my_llm, verbose=True
-    )
-
-    # AGENT 3: THE SKEPTIC (New for Hackathons)
     risk_agent = Agent(
-        role='Anti-Fraud & Risk Auditor',
-        goal='Identify potential red flags, circular transactions, or signs of financial distress.',
-        backstory='Your job is to find reasons NOT to lend. Look for high-frequency low-value transfers or gambling markers.',
+        role='Fraud & Risk Skeptic',
+        goal='Identify red flags, circular transactions, and gambling markers.',
+        backstory='Your job is to protect the lender. Look for synthetic volume inflation and signs of financial distress.',
         llm=my_llm, verbose=True
     )
 
-    # AGENT 4: The Manager
-    manager = Agent(
+    underwriter = Agent(
         role='Chief Credit Underwriter',
-        goal='Synthesize agent reports into a final credit score and actionable roadmap.',
-        backstory='Final decision maker. Balances the optimism of the Cashflow agent with the caution of the Risk agent.',
+        goal='Synthesize agent reports into a final 300-900 score with a reasoning trace.',
+        backstory='You reconcile the optimism of the Stability agent with the caution of the Risk agent.',
         llm=my_llm, verbose=True
     )
 
-    t1 = Task(description=f"Analyze UPI Stability: {upi_data}", expected_output="Cashflow Health Score (1-10)", agent=tx_agent)
-    t2 = Task(description=f"Analyze Bill Punctuality: {bill_data}", expected_output="Reliability Score (1-10)", agent=util_agent)
-    t3 = Task(description="Audit for Fraud or Risk markers in the provided data.", expected_output="Risk Flag Assessment.", agent=risk_agent)
-    
-    t4 = Task(
-        description="""Generate a FINAL report. 
-        1. Summarize reasoning from all agents.
-        2. Provide a 'Score Breakdown' (Stability, Reliability, Risk).
-        3. Provide 3 specific 'Improvement Steps'.
-        4. End with EXACTLY: 'FINAL_SCORE: XXX'""",
-        expected_output="Professional Underwriting Report with FINAL_SCORE tag.",
-        agent=manager,
-        context=[t1, t2, t3]
+    # --- TASK DEFINITIONS ---
+    t1 = Task(
+        description=f"Analyze UPI Logs: {upi_data}\nAnalyze Bills: {bill_data}",
+        expected_output="A detailed summary of monthly net cashflow and payment punctuality.",
+        agent=tx_agent
     )
 
-    crew = Crew(agents=[tx_agent, util_agent, risk_agent, manager], tasks=[t1, t2, t3, t4], process=Process.sequential)
+    t2 = Task(
+        description="Audit the provided data for risk markers like gambling, late fees, or circular transfers.",
+        expected_output="A Risk Flag report highlighting specific anomalies or 'Clear' status.",
+        agent=risk_agent
+    )
+
+    t3 = Task(
+        description="""Generate the Final Underwriting Report.
+        1. Executive Summary: Why this score?
+        2. Financial Health: Score out of 10.
+        3. Risk Assessment: Score out of 10.
+        4. Improvement Roadmap: 3 steps to boost score.
+        5. FINAL_SCORE: [300-900] (MUST include this tag).""",
+        expected_output="Professional Markdown Report ending with FINAL_SCORE: XXX.",
+        agent=underwriter,
+        context=[t1, t2]
+    )
+
+    crew = Crew(
+        agents=[tx_agent, risk_agent, underwriter],
+        tasks=[t1, t2, t3],
+        process=Process.sequential
+    )
+    
     return str(crew.kickoff())
