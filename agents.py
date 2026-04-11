@@ -1,65 +1,66 @@
 import os
 from crewai import Agent, Task, Crew, Process, LLM
 
-def run_assessment(upi_data, api_key=None):
-    if api_key:
-        os.environ["GROQ_API_KEY"] = api_key
+def run_assessment(upi_data, bill_data, api_key):
+    # API Configuration
+    os.environ["GROQ_API_KEY"] = api_key if api_key else os.environ.get("GROQ_API_KEY")
     
-    # Model Strategy
-    worker_llm = LLM(model="groq/llama-3.1-8b-instant", temperature=0.1)
-    decision_llm = LLM(model="groq/llama-3.3-70b-versatile", temperature=0.1)
+    # Using Llama 3.3 70B
+    my_llm = LLM(model="groq/llama-3.3-70b-versatile")
 
-    # 1. DATA EXTRACTOR (8B) - Focuses on hard numbers
-    extractor = Agent(
-        role='Data Integrity Specialist',
-        goal='Extract raw numbers and verify transaction authenticity.',
-        backstory='You are a forensic accountant. You identify circular trading and fake volume.',
-        llm=worker_llm
+    # --- AGENT DEFINITIONS ---
+    tx_agent = Agent(
+        role='Financial Stability Auditor',
+        goal='Extract income and spending patterns from raw text.',
+        backstory='Expert in Indian banking ecosystems and UPI logs.',
+        llm=my_llm, 
+        verbose=True
     )
 
-    # 2. RISK AUDITOR (8B) - Focuses on behavioral red flags
-    auditor = Agent(
-        role='Behavioral Risk Analyst',
-        goal='Identify gambling, credit-hunger, and lifestyle instability.',
-        backstory='You look for patterns that suggest high probability of default.',
-        llm=worker_llm
+    risk_agent = Agent(
+        role='Fraud & Risk Auditor',
+        goal='Identify red flags, circular transactions, and signs of financial distress.',
+        backstory='Skeptical auditor looking for synthetic volume or gambling patterns.',
+        llm=my_llm, 
+        verbose=True
     )
 
-    # 3. CHIEF UNDERWRITER (70B) - The "Judge"
     underwriter = Agent(
-        role='Chief Underwriter',
-        goal='Provide a final score and a status: APPROVED, REVIEW, or UNAPPROVED.',
-        backstory='You balance raw cash flow against behavioral risks. You are conservative.',
-        llm=decision_llm
+        role='Chief Credit Underwriter',
+        goal='Synthesize reports into a final 300-900 score.',
+        backstory='Final decision-maker who reconciles stability and risk data.',
+        llm=my_llm, 
+        verbose=True
     )
 
+    # --- TASK DEFINITIONS ---
     t1 = Task(
-        description=f"Map all income and expenses from: {upi_data}. Identify any circular transfers.",
-        expected_output="A structured financial sheet: Income, Expense, Surplus, and Verification Status.",
-        agent=extractor
+        description=f"Analyze the following data: \nUPI: {upi_data}\nBills: {bill_data}",
+        expected_output="A structured summary of cashflow health.",
+        agent=tx_agent
     )
 
     t2 = Task(
-        description="Analyze the narration for gambling, late fees, or high-risk discretionary spending.",
-        expected_output="A Risk Intensity Report (1-10) with specific evidence.",
-        agent=auditor
+        description="Audit the provided data for risk markers: gambling, circular transfers, or overdue bill penalties.",
+        expected_output="A Risk Assessment report.",
+        agent=risk_agent
     )
 
     t3 = Task(
-        description="""Generate the Final Credit Dossier. 
-        Calculate the FINAL_SCORE [300-900].
-        Assign ANALYSIS_STATUS:
-        - APPROVED: If Score > 720 and Risk < 3.
-        - REVIEW: If Score 600-720 or evidence is vague.
-        - UNAPPROVED: If Score < 600 or hard defaults found.
-        """,
-        expected_output="Markdown report ending with: FINAL_SCORE: XXX and STATUS: XXX",
+        description="""Generate the FINAL Underwriting Report:
+        1. Executive Summary
+        2. Financial Health Score
+        3. Risk Assessment Score
+        4. Improvement Roadmap
+        5. FINAL_SCORE: [300-900] (MUST include this tag).""",
+        expected_output="Professional Markdown Report ending with FINAL_SCORE: XXX.",
         agent=underwriter,
         context=[t1, t2]
     )
 
+    # --- EXECUTION ---
     crew = Crew(
-        agents=[extractor, auditor, underwriter],
+        agents=[tx_agent, risk_agent, underwriter],
         tasks=[t1, t2, t3],
         process=Process.sequential
     )
