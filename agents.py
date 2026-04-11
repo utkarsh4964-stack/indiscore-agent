@@ -1,45 +1,49 @@
 import os
-from crewai import Agent, Task, Crew, Process
+from crewai import Agent, Task, Crew, Process, LLM
 
 def run_assessment(upi_data, bill_data, api_key):
-    os.environ["GROQ_API_KEY"] = "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"
+    # Use provided key or fallback to environment
+    os.environ["GROQ_API_KEY"] = api_key if api_key else os.environ.get("GROQ_API_KEY")
     
-    # NEW MODEL ID FOR 2026
-    # llama-3.3-70b-versatile is the recommended replacement
-    model_id = "groq/llama-3.3-70b-versatile"
+    # 2026 Production Model
+    my_llm = LLM(model="groq/llama-3.3-70b-versatile")
 
-    # Agent 1: The Transaction Expert
     tx_agent = Agent(
         role='UPI Transaction Specialist',
         goal='Analyze financial stability from raw UPI logs.',
-        backstory='Expert in Indian digital payment patterns.',
-        llm=model_id, 
+        backstory='Expert in Indian digital payment patterns. You look for consistent income and rent markers.',
+        llm=my_llm, 
         verbose=True,
         allow_delegation=False
     )
 
-    # Agent 2: The Reliability Expert
     util_agent = Agent(
         role='Utility Analyst',
         goal='Assess payment reliability via utility bills.',
-        backstory='Focuses on punctuality as a sign of credit character.',
-        llm=model_id,
+        backstory='Focuses on punctuality as a sign of financial character.',
+        llm=my_llm,
         verbose=True,
         allow_delegation=False
     )
 
-    # Agent 3: The Manager
     manager = Agent(
         role='Chief Credit Underwriter',
-        goal='Generate a final score and reasoning trace.',
-        backstory='Reconciles data into a final decision.',
-        llm=model_id,
+        goal='Generate a final score (300-900) and reasoning trace.',
+        backstory='Reconciles data into a final, human-readable report.',
+        llm=my_llm,
         verbose=True
     )
 
-    t1 = Task(description=f"Analyze UPI: {upi_data}", expected_output="Stability score 1-10.", agent=tx_agent)
-    t2 = Task(description=f"Analyze Bills: {bill_data}", expected_output="Reliability score 1-10.", agent=util_agent)
-    t3 = Task(description="Final Score & Reasoning.", expected_output="Detailed Markdown report.", agent=manager, context=[t1, t2])
+    t1 = Task(description=f"Analyze UPI: {upi_data}", expected_output="Stability analysis.", agent=tx_agent)
+    t2 = Task(description=f"Analyze Bills: {bill_data}", expected_output="Reliability report.", agent=util_agent)
+    
+    # CRITICAL: Added explicit formatting instruction for the score
+    t3 = Task(
+        description="Summarize the findings. You MUST include a final score between 300 and 900. Format it exactly as 'FINAL_SCORE: XXX' at the very end.", 
+        expected_output="Markdown report ending with FINAL_SCORE: [number].", 
+        agent=manager, 
+        context=[t1, t2]
+    )
 
     crew = Crew(
         agents=[tx_agent, util_agent, manager], 
