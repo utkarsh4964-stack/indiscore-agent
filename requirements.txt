@@ -5,3 +5,4 @@ plotly
 langchain-groq
 python-dotenv
 setuptools
+pysqlite3-binary
