@@ -2,3 +2,4 @@ streamlit
 crewai
 litellm
 pysqlite3-binary
+plotly
