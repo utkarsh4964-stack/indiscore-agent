@@ -1,10 +1,6 @@
 streamlit
-crewai==0.28.8
+crewai
 pypdf
 plotly
-langchain-groq
+langchain_groq
 python-dotenv
-setuptools
-pysqlite3-binary
-litellm
-langchain_community
