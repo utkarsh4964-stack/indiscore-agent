@@ -1,68 +1,65 @@
 import os
 from crewai import Agent, Task, Crew, Process, LLM
 
-def run_assessment(upi_data, bill_data, api_key):
-    # API Configuration
-    os.environ["GROQ_API_KEY"] = api_key if api_key else os.environ.get("GROQ_API_KEY")
+def run_assessment(upi_data, bill_data, api_key=None):
+    if api_key:
+        os.environ["GROQ_API_KEY"] = api_key
     
-    # Using Llama 3.3 70B
-    my_llm = LLM(model="groq/llama-3.3-70b-versatile")
+    # Force temperature to 0 for objective scoring
+    my_llm = LLM(model="groq/llama-3.3-70b-versatile", temperature=0.0)
 
-    # --- AGENT DEFINITIONS ---
-    tx_agent = Agent(
-        role='Financial Stability Auditor',
-        goal='Extract income and spending patterns from raw text.',
-        backstory='Expert in Indian banking ecosystems and UPI logs.',
-        llm=my_llm, 
-        verbose=True
+    # 1. Forensic Agent
+    extractor = Agent(
+        role='Fraud Detection Specialist',
+        goal='Identify fake transaction volume and circular trading.',
+        backstory='You are a skeptical auditor. You assume users try to game the system.',
+        llm=my_llm
     )
 
-    risk_agent = Agent(
-        role='Fraud & Risk Auditor',
-        goal='Identify red flags, circular transactions, and signs of financial distress.',
-        backstory='Skeptical auditor looking for synthetic volume or gambling patterns.',
-        llm=my_llm, 
-        verbose=True
+    # 2. Risk Agent
+    auditor = Agent(
+        role='Risk Analyst',
+        goal='Flag gambling, defaults, and late fees.',
+        backstory='You look for behavioral red flags that lead to loan default.',
+        llm=my_llm
     )
 
+    # 3. Final Judge
     underwriter = Agent(
-        role='Chief Credit Underwriter',
-        goal='Synthesize reports into a final 300-900 score.',
-        backstory='Final decision-maker who reconciles stability and risk data.',
-        llm=my_llm, 
-        verbose=True
+        role='Chief Underwriter',
+        goal='Assign a score and status based on strict penalty rules.',
+        backstory='You are conservative. You would rather reject a good user than approve a bad one.',
+        llm=my_llm
     )
 
-    # --- TASK DEFINITIONS ---
     t1 = Task(
-        description=f"Analyze the following data: \nUPI: {upi_data}\nBills: {bill_data}",
-        expected_output="A structured summary of cashflow health.",
-        agent=tx_agent
+        description=f"Analyze: {upi_data}. Flag back-and-forth transfers between same parties as 'Circular Trading'.",
+        expected_output="Verification report on data integrity.",
+        agent=extractor
     )
 
     t2 = Task(
-        description="Audit the provided data for risk markers: gambling, circular transfers, or overdue bill penalties.",
-        expected_output="A Risk Assessment report.",
-        agent=risk_agent
+        description=f"Analyze: {bill_data}. Identify late payments or failed EMIs.",
+        expected_output="Risk intensity summary.",
+        agent=auditor
     )
 
     t3 = Task(
-        description="""Generate the FINAL Underwriting Report:
-        1. Executive Summary
-        2. Financial Health Score
-        3. Risk Assessment Score
-        4. Improvement Roadmap
-        5. FINAL_SCORE: [300-900] (MUST include this tag).""",
-        expected_output="Professional Markdown Report ending with FINAL_SCORE: XXX.",
+        description="""
+        Synthesize findings into a final report.
+        MANDATORY PENALTY RULES:
+        - IF 'REVERSED' or 'Insufficient Funds' found: Set Score < 400 immediately.
+        - IF 'Circular Trading' found: Set Score < 500 and STATUS: UNAPPROVED.
+        - IF 'Gambling/Betting' found: Set STATUS: UNAPPROVED.
+        
+        Format the END of your response exactly as:
+        FINAL_SCORE: [number]
+        STATUS: [APPROVED/REVIEW/UNAPPROVED]
+        """,
+        expected_output="Final Dossier with Score and Status.",
         agent=underwriter,
         context=[t1, t2]
     )
 
-    # --- EXECUTION ---
-    crew = Crew(
-        agents=[tx_agent, risk_agent, underwriter],
-        tasks=[t1, t2, t3],
-        process=Process.sequential
-    )
-    
+    crew = Crew(agents=[extractor, auditor, underwriter], tasks=[t1, t2, t3])
     return str(crew.kickoff())
