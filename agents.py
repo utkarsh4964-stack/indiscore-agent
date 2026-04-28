@@ -1,68 +1,55 @@
 import os
-from crewai import Agent, Task, Crew, Process, LLM
+from crewai import Agent, LLM
+from dotenv import load_dotenv
 
-def run_assessment(upi_data, bill_data, api_key):
-    # API Configuration
-    os.environ["GROQ_API_KEY"] = api_key if api_key else os.environ.get("GROQ_API_KEY")
-    
-    # Using Llama 3.3 70B
-    my_llm = LLM(model="groq/llama-3.3-70b-versatile")
+# Load environment variables (Make sure GROQ_API_KEY is in your .env or Streamlit Secrets)
+load_dotenv()
 
-    # --- AGENT DEFINITIONS ---
-    tx_agent = Agent(
-        role='Financial Stability Auditor',
-        goal='Extract income and spending patterns from raw text.',
-        backstory='Expert in Indian banking ecosystems and UPI logs.',
-        llm=my_llm, 
-        verbose=True
-    )
+# Define the LLM with the correct provider prefix
+# The prefix "groq/" tells CrewAI to use the Groq bridge (requires litellm installed)
+groq_llm = LLM(
+    model="groq/llama-3.3-70b-versatile",
+    temperature=0.2,
+    api_key=os.getenv("GROQ_API_KEY") 
+)
 
-    risk_agent = Agent(
-        role='Fraud & Risk Auditor',
-        goal='Identify red flags, circular transactions, and signs of financial distress.',
-        backstory='Skeptical auditor looking for synthetic volume or gambling patterns.',
-        llm=my_llm, 
-        verbose=True
-    )
+class IndiScoreAgents:
+    def credit_analyst_agent(self):
+        return Agent(
+            role="Senior Credit Risk Analyst",
+            goal="Analyze alternative data points to assess creditworthiness for NTC (New-to-Credit) users.",
+            backstory=(
+                "You are an expert in Indian financial systems and alternative credit scoring. "
+                "Your strength lies in identifying patterns in non-traditional data like utility bills, "
+                "digital footprints, and behavioral trends to predict repayment capability."
+            ),
+            allow_delegation=False,
+            verbose=True,
+            llm=groq_llm
+        )
 
-    underwriter = Agent(
-        role='Chief Credit Underwriter',
-        goal='Synthesize reports into a final 300-900 score.',
-        backstory='Final decision-maker who reconciles stability and risk data.',
-        llm=my_llm, 
-        verbose=True
-    )
+    def data_validator_agent(self):
+        return Agent(
+            role="Financial Data Integrity Specialist",
+            goal="Cross-verify and clean raw user data to ensure accuracy before credit scoring.",
+            backstory=(
+                "You specialize in detecting anomalies and fraudulent entries in financial datasets. "
+                "You ensure that the multi-agent system operates on high-fidelity data."
+            ),
+            allow_delegation=False,
+            verbose=True,
+            llm=groq_llm
+        )
 
-    # --- TASK DEFINITIONS ---
-    t1 = Task(
-        description=f"Analyze the following data: \nUPI: {upi_data}\nBills: {bill_data}",
-        expected_output="A structured summary of cashflow health.",
-        agent=tx_agent
-    )
-
-    t2 = Task(
-        description="Audit the provided data for risk markers: gambling, circular transfers, or overdue bill penalties.",
-        expected_output="A Risk Assessment report.",
-        agent=risk_agent
-    )
-
-    t3 = Task(
-        description="""Generate the FINAL Underwriting Report:
-        1. Executive Summary
-        2. Financial Health Score
-        3. Risk Assessment Score
-        4. Improvement Roadmap
-        5. FINAL_SCORE: [300-900] (MUST include this tag).""",
-        expected_output="Professional Markdown Report ending with FINAL_SCORE: XXX.",
-        agent=underwriter,
-        context=[t1, t2]
-    )
-
-    # --- EXECUTION ---
-    crew = Crew(
-        agents=[tx_agent, risk_agent, underwriter],
-        tasks=[t1, t2, t3],
-        process=Process.sequential
-    )
-    
-    return str(crew.kickoff())
+    def strategy_agent(self):
+        return Agent(
+            role="Fintech Product Strategist",
+            goal="Synthesize technical credit scores into actionable business insights and loan limit recommendations.",
+            backstory=(
+                "You bridge the gap between technical risk data and business growth. "
+                "You provide the final 'IndiScore' report that banks and NBFCs use to make lending decisions."
+            ),
+            allow_delegation=True,
+            verbose=True,
+            llm=groq_llm
+        )
