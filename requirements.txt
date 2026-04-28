@@ -1,6 +1,4 @@
 streamlit
 crewai
-pypdf
-plotly
-langchain_groq
+litellm
 python-dotenv
