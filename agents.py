@@ -1,6 +1,5 @@
 import os
-from crewai import Agent, Task, Crew, Process
-from langchain_groq import ChatGroq
+from crewai import Agent, Task, Crew, Process, LLM
 
 def run_assessment(upi_data, bill_data, api_key):
     # Determine the API key to use
@@ -9,10 +8,12 @@ def run_assessment(upi_data, bill_data, api_key):
     if not active_key:
         return "Error: Groq API Key is missing. Please provide it in the sidebar or application secrets."
 
-    # Explicitly initialize via LangChain Groq provider to eliminate CrewAI LLM ImportErrors
-    my_llm = ChatGroq(
-        model="llama-3.3-70b-specdec", # Using the stable production-ready Groq identifier
-        groq_api_key=active_key,
+    # Using CrewAI's explicit LLM configuration wrapper.
+    # Passing provider, model, and api_key directly inside the native LLM class 
+    # completely bypasses the LangChain type-validation issues in Pydantic.
+    my_llm = LLM(
+        model="groq/llama-3.3-70b-specdec", 
+        api_key=active_key,
         temperature=0.2
     )
 
