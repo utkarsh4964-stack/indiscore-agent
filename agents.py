@@ -1,32 +1,29 @@
 import os
-from crewai import Agent, Task, Crew, Process, LLM
+from crewai import Agent, Task, Crew, Process
+from langchain_groq import ChatGroq
 
 def run_assessment(upi_data, bill_data, api_key):
-    # Determine the active API key to use
+    # Route active credentials cleanly
     active_key = api_key if api_key else os.environ.get("GROQ_API_KEY")
     
     if not active_key:
         return "Error: Groq API Key is missing. Please provide it in the sidebar or application secrets."
 
-    # Explicitly register the API key into the environment context 
-    # so CrewAI's internal processing layers don't fail to fetch credentials
-    os.environ["GROQ_API_KEY"] = active_key
-
-    # Initialize CrewAI's native LLM class with explicit parameter strings.
-    # Passing standard primitive parameters completely satisfies Pydantic's strict 
-    # type-checking constraints on Agent initialization.
-    my_llm = LLM(
-        model="groq/llama-3.3-70b-specdec",
-        api_key=active_key,
+    # Direct LangChain setup completely bypasses crewai/llm.py and litellm dynamic loading errors
+    langchain_llm = ChatGroq(
+        model_name="llama-3.3-70b-specdec",  # Stable high-performance production variant
+        groq_api_key=active_key,
         temperature=0.2
     )
 
     # --- AGENT DEFINITIONS ---
+    # Passing the LangChain model object directly to the llm parameter is fully 
+    # supported in modern CrewAI versions as long as it has a valid backend mapping.
     tx_agent = Agent(
         role='Financial Stability Auditor',
         goal='Extract clean income and spending metrics from unstructured text inputs.',
         backstory='Expert analytical system specializing in Indian banking habits, UPI logs, and transaction statements.',
-        llm=my_llm, 
+        llm=langchain_llm, 
         verbose=True,
         allow_delegation=False
     )
@@ -35,7 +32,7 @@ def run_assessment(upi_data, bill_data, api_key):
         role='Fraud & Risk Auditor',
         goal='Identify red flags, circular transaction flows, and signs of severe financial distress.',
         backstory='Skeptical compliance engine checking for synthetic volume, high-velocity recycling, or gambling patterns.',
-        llm=my_llm, 
+        llm=langchain_llm, 
         verbose=True,
         allow_delegation=False
     )
@@ -44,7 +41,7 @@ def run_assessment(upi_data, bill_data, api_key):
         role='Chief Credit Underwriter',
         goal='Synthesize raw auditor summaries into a unified credit safety evaluation profile scoring between 300 and 900.',
         backstory='Senior risk framework manager that aggregates financial stability indicators against risk markers.',
-        llm=my_llm, 
+        llm=langchain_llm, 
         verbose=True,
         allow_delegation=False
     )
