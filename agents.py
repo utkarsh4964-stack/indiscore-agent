@@ -3,17 +3,17 @@ from crewai import Agent, Task, Crew, Process
 from langchain_groq import ChatGroq
 
 def run_assessment(upi_data, bill_data, api_key):
-    # Determine the API key to use
+    # Fallback to environment variable if UI text input is blank
     active_key = api_key if api_key else os.environ.get("GROQ_API_KEY")
     
     if not active_key:
         return "Error: Groq API Key is missing. Please provide it in the sidebar or application secrets."
 
-    # Direct LangChain instantiation completely bypasses crewai/llm.py and litellm errors
+    # Direct LangChain setup handles authentication seamlessly without litellm dependency crashes
     my_llm = ChatGroq(
-        model_name="llama-3.3-70b-specdec", # High-throughput stable Groq production model ID
+        model="llama-3.3-70b-specdec",  # Stable high-throughput production model ID
         groq_api_key=active_key,
-        temperature=0.2
+        temperature=0.1
     )
 
     # --- AGENT DEFINITIONS ---
