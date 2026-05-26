@@ -1,70 +1,69 @@
 import os
-from crewai import Agent, Task, Crew, Process, LLM
+from crewai import Agent, Task, Crew, Process
 
 def run_assessment(upi_data, bill_data, api_key):
-    # Determine the API key to use
+    # Enforce active credential routing
     active_key = api_key if api_key else os.environ.get("GROQ_API_KEY")
     
     if not active_key:
         return "Error: Groq API Key is missing. Please provide it in the sidebar or application secrets."
 
-    # Using the structured LLM block handles internal parameter mapping flawlessly
-    my_llm = LLM(
-        model="groq/llama-3.3-70b-versatile",
-        api_key=active_key,
-        temperature=0.2
-    )
+    # Force injecting into os.environ. LiteLLM handles string mapping perfectly when this is set.
+    os.environ["GROQ_API_KEY"] = active_key
+
+    # Standard canonical ID string that works natively with CrewAI's auto-resolver
+    target_model = "groq/llama-3.3-70b-versatile"
 
     # --- AGENT DEFINITIONS ---
     tx_agent = Agent(
         role='Financial Stability Auditor',
-        goal='Extract income and spending patterns from raw text.',
-        backstory='Expert in Indian banking ecosystems, transaction logs, and UPI statements.',
-        llm=my_llm, 
+        goal='Extract clean income and spending metrics from unstructured strings.',
+        backstory='Expert analytical system trained in Indian banking habits and UPI transaction summaries.',
+        llm=target_model, 
         verbose=True,
         allow_delegation=False
     )
 
     risk_agent = Agent(
         role='Fraud & Risk Auditor',
-        goal='Identify red flags, circular transactions, and signs of financial distress.',
-        backstory='Skeptical auditor looking for synthetic volume, heavy credit recycling, or gambling patterns.',
-        llm=my_llm, 
+        goal='Identify red flags, circular transfers, and signs of extreme financial stress.',
+        backstory='Skeptical compliance engine checking for synthetic trade volume or gambling markers.',
+        llm=target_model, 
         verbose=True,
         allow_delegation=False
     )
 
     underwriter = Agent(
         role='Chief Credit Underwriter',
-        goal='Synthesize reports into a final creditworthiness assessment scoring between 300 and 900.',
-        backstory='Final decision-maker who balances stability metrics against risk indices.',
-        llm=my_llm, 
+        goal='Synthesize raw auditor summaries into an unified credit safety evaluation score.',
+        backstory='Senior risk framework manager that aggregates stability metrics against anomalies.',
+        llm=target_model, 
         verbose=True,
         allow_delegation=False
     )
 
     # --- TASK DEFINITIONS ---
     t1 = Task(
-        description=f"Analyze the following financial data carefully: \nUPI/Bank Logs: {upi_data}\nBills: {bill_data}",
-        expected_output="A structured summary mapping average monthly cash flows, regular income spikes, and operational expenses.",
+        description=f"Parse through these financial inputs thoroughly: \nUPI Log Streams: {upi_data}\nBill Profiles: {bill_data}",
+        expected_output="A structured summary mapping out primary spending streams and cash inflows.",
         agent=tx_agent
     )
 
     t2 = Task(
-        description="Audit the provided transactional data specifically for risk markers: gaming/gambling transactions, repetitive circular transfers, or late-payment penalties.",
-        expected_output="A comprehensive Risk Assessment report highlighting critical vulnerabilities or anomalies.",
+        description="Scan through the user inputs to flag recurring anomalies like gaming/gambling records, circular money bouncing, or consistent payment failure penalties.",
+        expected_output="A clean vulnerability breakdown detailing any uncovered high-risk patterns.",
         agent=risk_agent
     )
 
     t3 = Task(
-        description="""Generate the FINAL Underwriting Report by combining the findings.
-        The report must be meticulously formatted and structured as follows:
+        description="""Compile the data into a single finalized credit score assessment document.
+        The layout must output exactly matching this structure:
         1. Executive Summary
         2. Financial Health Score Analysis
         3. Risk Assessment Breakdown
         4. Improvement Roadmap
         5. FINAL_SCORE: [300-900] (You MUST append this exact phrase at the very end, e.g., FINAL_SCORE: 720)""",
-        expected_output="A professional Markdown report concluding with the absolute string 'FINAL_SCORE: XXX'.",
+        expected_output="A clean markdown report that finishes explicitly with the uppercase anchor 'FINAL_SCORE: XXX'.",
         agent=underwriter,
         context=[t1, t2]
     )
