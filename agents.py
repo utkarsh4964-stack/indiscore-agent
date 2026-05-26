@@ -1,5 +1,6 @@
 import os
 from crewai import Agent, Task, Crew, Process
+from langchain_groq import ChatGroq
 
 def run_assessment(upi_data, bill_data, api_key):
     # Enforce active credential routing
@@ -8,18 +9,19 @@ def run_assessment(upi_data, bill_data, api_key):
     if not active_key:
         return "Error: Groq API Key is missing. Please provide it in the sidebar or application secrets."
 
-    # Force injecting into os.environ. LiteLLM handles string mapping perfectly when this is set.
-    os.environ["GROQ_API_KEY"] = active_key
-
-    # Standard canonical ID string that works natively with CrewAI's auto-resolver
-    target_model = "groq/llama-3.3-70b-versatile"
+    # Using the direct LangChain integration layout bypasses litellm serialization issues entirely
+    my_llm = ChatGroq(
+        model_name="llama-3.3-70b-versatile",
+        groq_api_key=active_key,
+        temperature=0.2
+    )
 
     # --- AGENT DEFINITIONS ---
     tx_agent = Agent(
         role='Financial Stability Auditor',
         goal='Extract clean income and spending metrics from unstructured strings.',
         backstory='Expert analytical system trained in Indian banking habits and UPI transaction summaries.',
-        llm=target_model, 
+        llm=my_llm,  # Directly binding the LangChain model instance
         verbose=True,
         allow_delegation=False
     )
@@ -28,16 +30,16 @@ def run_assessment(upi_data, bill_data, api_key):
         role='Fraud & Risk Auditor',
         goal='Identify red flags, circular transfers, and signs of extreme financial stress.',
         backstory='Skeptical compliance engine checking for synthetic trade volume or gambling markers.',
-        llm=target_model, 
+        llm=my_llm, 
         verbose=True,
         allow_delegation=False
     )
 
     underwriter = Agent(
         role='Chief Credit Underwriter',
-        goal='Synthesize raw auditor summaries into an unified credit safety evaluation score.',
+        goal='Synthesize raw auditor summaries into a unified credit safety evaluation score.',
         backstory='Senior risk framework manager that aggregates stability metrics against anomalies.',
-        llm=target_model, 
+        llm=my_llm, 
         verbose=True,
         allow_delegation=False
     )
