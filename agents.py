@@ -3,25 +3,31 @@ from crewai import Agent, Task, Crew, Process
 from langchain_groq import ChatGroq
 
 def run_assessment(upi_data, bill_data, api_key):
-    # Enforce active credential routing
+    # Route active credentials cleanly
     active_key = api_key if api_key else os.environ.get("GROQ_API_KEY")
     
     if not active_key:
         return "Error: Groq API Key is missing. Please provide it in the sidebar or application secrets."
 
-    # Using the direct LangChain integration layout bypasses litellm serialization issues entirely
-    my_llm = ChatGroq(
+    # Direct LangChain setup completely bypasses litellm loading crashes
+    langchain_llm = ChatGroq(
         model_name="llama-3.3-70b-versatile",
         groq_api_key=active_key,
         temperature=0.2
     )
 
+    # To keep Pydantic v2 quiet, we pass a valid string identifier to llm,
+    # and attach our robust LangChain object to function_calling_llm.
+    # This tricks CrewAI into routing all backend prompt executions through ChatGroq.
+    target_model = "groq/llama-3.3-70b-versatile"
+
     # --- AGENT DEFINITIONS ---
     tx_agent = Agent(
         role='Financial Stability Auditor',
-        goal='Extract clean income and spending metrics from unstructured strings.',
+        goal='Extract clear income and spending metrics from unstructured strings.',
         backstory='Expert analytical system trained in Indian banking habits and UPI transaction summaries.',
-        llm=my_llm,  # Directly binding the LangChain model instance
+        llm=target_model,
+        function_calling_llm=langchain_llm,
         verbose=True,
         allow_delegation=False
     )
@@ -30,7 +36,8 @@ def run_assessment(upi_data, bill_data, api_key):
         role='Fraud & Risk Auditor',
         goal='Identify red flags, circular transfers, and signs of extreme financial stress.',
         backstory='Skeptical compliance engine checking for synthetic trade volume or gambling markers.',
-        llm=my_llm, 
+        llm=target_model,
+        function_calling_llm=langchain_llm,
         verbose=True,
         allow_delegation=False
     )
@@ -39,7 +46,8 @@ def run_assessment(upi_data, bill_data, api_key):
         role='Chief Credit Underwriter',
         goal='Synthesize raw auditor summaries into a unified credit safety evaluation score.',
         backstory='Senior risk framework manager that aggregates stability metrics against anomalies.',
-        llm=my_llm, 
+        llm=target_model,
+        function_calling_llm=langchain_llm,
         verbose=True,
         allow_delegation=False
     )
