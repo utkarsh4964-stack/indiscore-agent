@@ -1,82 +1,156 @@
+"""
+agents.py — IndiScore Pro Multi-Agent Credit Pipeline
+Implements a 3-agent sequential pipeline using the Groq SDK directly,
+replacing the unstable CrewAI dependency that caused Streamlit Cloud failures.
+"""
+
 import os
-from crewai import Agent, Task, Crew, Process
-from langchain_groq import ChatGroq
+from groq import Groq
 
-def run_assessment(upi_data, bill_data, api_key):
-    # Route active credentials cleanly
-    active_key = api_key if api_key else os.environ.get("GROQ_API_KEY")
-    
-    if not active_key:
-        return "Error: Groq API Key is missing. Please provide it in the sidebar or application secrets."
 
-    # Direct LangChain setup completely bypasses crewai/llm.py and litellm dynamic loading errors
-    langchain_llm = ChatGroq(
-        model_name="llama-3.3-70b-specdec",  # Stable high-performance production variant
-        groq_api_key=active_key,
-        temperature=0.2
+def _call_llm(client: Groq, system_prompt: str, user_message: str, max_tokens: int = 1500) -> str:
+    """Single LLM call wrapper with error handling."""
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            max_tokens=max_tokens,
+            temperature=0.3,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"[Agent Error: {e}]"
+
+
+def run_assessment(upi_data: str, bill_data: str, api_key: str) -> str:
+    """
+    Runs a sequential 3-agent credit assessment pipeline.
+
+    Agent 1 — Financial Stability Auditor: cashflow & income analysis
+    Agent 2 — Fraud & Risk Auditor: anomaly & red-flag detection
+    Agent 3 — Chief Credit Underwriter: final score + explainable report
+
+    Returns a Markdown report ending with: FINAL_SCORE: XXX
+    """
+    key = api_key.strip() if api_key else os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        return (
+            "**⛔ Configuration Error:** No Groq API key provided.\n\n"
+            "Please enter your Groq API key in the sidebar to run the analysis."
+        )
+
+    client = Groq(api_key=key)
+
+    # ── AGENT 1: Financial Stability Auditor ──────────────────────────────────
+    tx_report = _call_llm(
+        client=client,
+        system_prompt="""You are a Financial Stability Auditor specialising in Indian banking, UPI, and gig-economy ecosystems.
+Your task is to analyse raw UPI transaction logs and bank statements to:
+- Identify all income sources and measure consistency month-over-month
+- Detect EMI, rent, and recurring payment patterns
+- Assess savings rate and debt-to-income ratio
+- Recognise gig-platform payouts (Zomato, Swiggy, Ola, Urban Company, etc.)
+- Produce a structured cashflow health summary
+
+Be concise, objective, and structured.""",
+        user_message=f"""Analyse the financial data below and produce a structured cashflow summary.
+
+=== UPI TRANSACTION DATA ===
+{upi_data}
+
+=== UTILITY / BILL DATA ===
+{bill_data}
+
+Output format:
+**Income Consistency Score:** X/10
+**Spending Discipline Score:** X/10
+**Estimated Monthly Income:** ₹XX,XXX
+**Debt-to-Income Ratio:** XX%
+**Key Findings:**
+- finding 1
+- finding 2
+- finding 3""",
+        max_tokens=800,
     )
 
-    # --- AGENT DEFINITIONS ---
-    # Passing the LangChain model object directly to the llm parameter is fully 
-    # supported in modern CrewAI versions as long as it has a valid backend mapping.
-    tx_agent = Agent(
-        role='Financial Stability Auditor',
-        goal='Extract clean income and spending metrics from unstructured text inputs.',
-        backstory='Expert analytical system specializing in Indian banking habits, UPI logs, and transaction statements.',
-        llm=langchain_llm, 
-        verbose=True,
-        allow_delegation=False
+    # ── AGENT 2: Fraud & Risk Auditor ─────────────────────────────────────────
+    risk_report = _call_llm(
+        client=client,
+        system_prompt="""You are a sceptical Fraud & Risk Auditor for an Indian fintech lending company.
+Your task is to detect:
+- Circular / round-trip transactions (money immediately returned)
+- Synthetic volume inflation (artificial transactions to inflate income)
+- Gambling or high-risk spending (Teen Patti, fantasy sports, crypto)
+- Overdue payment penalties and late fees
+- Sudden unexplained large inflows or outflows
+- Any signs of financial distress or misrepresentation
+
+Rate each risk factor clearly and assign an overall risk score.""",
+        user_message=f"""Audit the following data for fraud markers and risk signals.
+
+=== UPI TRANSACTION DATA ===
+{upi_data}
+
+=== UTILITY / BILL DATA ===
+{bill_data}
+
+=== CASHFLOW ANALYSIS (from Agent 1) ===
+{tx_report}
+
+Output format:
+**Overall Fraud Risk:** Low / Medium / High
+**Risk Score:** X/10 (10 = highest risk)
+**Red Flags Detected:**
+- flag 1 (or "None detected")
+**Positive Signals:**
+- signal 1""",
+        max_tokens=800,
     )
 
-    risk_agent = Agent(
-        role='Fraud & Risk Auditor',
-        goal='Identify red flags, circular transaction flows, and signs of severe financial distress.',
-        backstory='Skeptical compliance engine checking for synthetic volume, high-velocity recycling, or gambling patterns.',
-        llm=langchain_llm, 
-        verbose=True,
-        allow_delegation=False
+    # ── AGENT 3: Chief Credit Underwriter ─────────────────────────────────────
+    final_report = _call_llm(
+        client=client,
+        system_prompt="""You are the Chief Credit Underwriter at IndiScore Pro, an Indian fintech company.
+You synthesise financial stability analysis and risk reports to produce a final credit score between 300 and 900.
+
+Scoring bands:
+- 300–549: Poor — high risk, not eligible for most credit
+- 550–649: Fair — limited credit access, higher interest rates
+- 650–749: Good — eligible for standard personal loans
+- 750–900: Excellent — eligible for premium credit products
+
+Your report must be professional, transparent, and follow the exact output format.
+You MUST end your report with the exact line: FINAL_SCORE: [number] where [number] is between 300 and 900.""",
+        user_message=f"""Generate the final credit underwriting report based on the two agent analyses below.
+
+=== FINANCIAL STABILITY ANALYSIS (Agent 1) ===
+{tx_report}
+
+=== FRAUD & RISK ASSESSMENT (Agent 2) ===
+{risk_report}
+
+Write a professional Markdown report with these exact sections:
+
+## 📊 Executive Summary
+(2–3 sentence overview of the applicant's financial profile)
+
+## 💰 Financial Health Assessment
+(Key income, spending, and savings insights)
+
+## 🚨 Risk & Fraud Assessment
+(Risk level, red flags, and positive signals)
+
+## 🗺️ Improvement Roadmap
+(3–5 actionable steps to improve the credit score)
+
+## 📌 Underwriter Decision
+(Final lending recommendation with rationale)
+
+FINAL_SCORE: [300–900]""",
+        max_tokens=1800,
     )
 
-    underwriter = Agent(
-        role='Chief Credit Underwriter',
-        goal='Synthesize raw auditor summaries into a unified credit safety evaluation profile scoring between 300 and 900.',
-        backstory='Senior risk framework manager that aggregates financial stability indicators against risk markers.',
-        llm=langchain_llm, 
-        verbose=True,
-        allow_delegation=False
-    )
-
-    # --- TASK DEFINITIONS ---
-    t1 = Task(
-        description=f"Parse through these financial inputs thoroughly: \nUPI Log Streams: {upi_data}\nBill Profiles: {bill_data}",
-        expected_output="A structured summary mapping out primary spending streams and cash inflows.",
-        agent=tx_agent
-    )
-
-    t2 = Task(
-        description="Scan through the user inputs to flag recurring anomalies like gaming/gambling records, circular money bouncing, or consistent payment failure penalties.",
-        expected_output="A clean vulnerability breakdown detailing any uncovered high-risk patterns.",
-        agent=risk_agent
-    )
-
-    t3 = Task(
-        description="""Compile the data into a single finalized credit score assessment document.
-        The layout must output exactly matching this structure:
-        1. Executive Summary
-        2. Financial Health Score Analysis
-        3. Risk Assessment Breakdown
-        4. Improvement Roadmap
-        5. FINAL_SCORE: [300-900] (You MUST append this exact phrase at the very end, e.g., FINAL_SCORE: 720)""",
-        expected_output="A clean markdown report that finishes explicitly with the uppercase anchor 'FINAL_SCORE: XXX'.",
-        agent=underwriter,
-        context=[t1, t2]
-    )
-
-    # --- EXECUTION ---
-    crew = Crew(
-        agents=[tx_agent, risk_agent, underwriter],
-        tasks=[t1, t2, t3],
-        process=Process.sequential
-    )
-    
-    return str(crew.kickoff())
+    return final_report
