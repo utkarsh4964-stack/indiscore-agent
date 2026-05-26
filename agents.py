@@ -1,5 +1,6 @@
 import os
-from crewai import Agent, Task, Crew, Process, LLM
+from crewai import Agent, Task, Crew, Process
+from langchain_groq import ChatGroq
 
 def run_assessment(upi_data, bill_data, api_key):
     # Determine the API key to use
@@ -8,12 +9,10 @@ def run_assessment(upi_data, bill_data, api_key):
     if not active_key:
         return "Error: Groq API Key is missing. Please provide it in the sidebar or application secrets."
 
-    # Using CrewAI's explicit LLM configuration wrapper.
-    # Passing provider, model, and api_key directly inside the native LLM class 
-    # completely bypasses the LangChain type-validation issues in Pydantic.
-    my_llm = LLM(
-        model="groq/llama-3.3-70b-specdec", 
-        api_key=active_key,
+    # Direct LangChain instantiation completely bypasses crewai/llm.py and litellm errors
+    my_llm = ChatGroq(
+        model_name="llama-3.3-70b-specdec", # High-throughput stable Groq production model ID
+        groq_api_key=active_key,
         temperature=0.2
     )
 
@@ -23,7 +22,8 @@ def run_assessment(upi_data, bill_data, api_key):
         goal='Extract income and spending patterns from raw text.',
         backstory='Expert in Indian banking ecosystems, transaction logs, and UPI statements.',
         llm=my_llm, 
-        verbose=True
+        verbose=True,
+        allow_delegation=False
     )
 
     risk_agent = Agent(
@@ -31,7 +31,8 @@ def run_assessment(upi_data, bill_data, api_key):
         goal='Identify red flags, circular transactions, and signs of financial distress.',
         backstory='Skeptical auditor looking for synthetic volume, heavy credit recycling, or gambling patterns.',
         llm=my_llm, 
-        verbose=True
+        verbose=True,
+        allow_delegation=False
     )
 
     underwriter = Agent(
@@ -39,7 +40,8 @@ def run_assessment(upi_data, bill_data, api_key):
         goal='Synthesize reports into a final creditworthiness assessment scoring between 300 and 900.',
         backstory='Final decision-maker who balances stability metrics against risk indices.',
         llm=my_llm, 
-        verbose=True
+        verbose=True,
+        allow_delegation=False
     )
 
     # --- TASK DEFINITIONS ---
