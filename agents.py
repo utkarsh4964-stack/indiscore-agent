@@ -1,18 +1,26 @@
 import os
-from crewai import Agent, Task, Crew, Process, LLM
+from crewai import Agent, Task, Crew, Process
+from langchain_groq import ChatGroq
 
 def run_assessment(upi_data, bill_data, api_key):
-    # API Configuration
-    os.environ["GROQ_API_KEY"] = api_key if api_key else os.environ.get("GROQ_API_KEY")
+    # Determine the API key to use
+    active_key = api_key if api_key else os.environ.get("GROQ_API_KEY")
     
-    # Using Llama 3.3 70B
-    my_llm = LLM(model="groq/llama-3.3-70b-versatile")
+    if not active_key:
+        return "Error: Groq API Key is missing. Please provide it in the sidebar or application secrets."
+
+    # Explicitly initialize via LangChain Groq provider to eliminate CrewAI LLM ImportErrors
+    my_llm = ChatGroq(
+        model="llama-3.3-70b-specdec", # Using the stable production-ready Groq identifier
+        groq_api_key=active_key,
+        temperature=0.2
+    )
 
     # --- AGENT DEFINITIONS ---
     tx_agent = Agent(
         role='Financial Stability Auditor',
         goal='Extract income and spending patterns from raw text.',
-        backstory='Expert in Indian banking ecosystems and UPI logs.',
+        backstory='Expert in Indian banking ecosystems, transaction logs, and UPI statements.',
         llm=my_llm, 
         verbose=True
     )
@@ -20,40 +28,41 @@ def run_assessment(upi_data, bill_data, api_key):
     risk_agent = Agent(
         role='Fraud & Risk Auditor',
         goal='Identify red flags, circular transactions, and signs of financial distress.',
-        backstory='Skeptical auditor looking for synthetic volume or gambling patterns.',
+        backstory='Skeptical auditor looking for synthetic volume, heavy credit recycling, or gambling patterns.',
         llm=my_llm, 
         verbose=True
     )
 
     underwriter = Agent(
         role='Chief Credit Underwriter',
-        goal='Synthesize reports into a final 300-900 score.',
-        backstory='Final decision-maker who reconciles stability and risk data.',
+        goal='Synthesize reports into a final creditworthiness assessment scoring between 300 and 900.',
+        backstory='Final decision-maker who balances stability metrics against risk indices.',
         llm=my_llm, 
         verbose=True
     )
 
     # --- TASK DEFINITIONS ---
     t1 = Task(
-        description=f"Analyze the following data: \nUPI: {upi_data}\nBills: {bill_data}",
-        expected_output="A structured summary of cashflow health.",
+        description=f"Analyze the following financial data carefully: \nUPI/Bank Logs: {upi_data}\nBills: {bill_data}",
+        expected_output="A structured summary mapping average monthly cash flows, regular income spikes, and operational expenses.",
         agent=tx_agent
     )
 
     t2 = Task(
-        description="Audit the provided data for risk markers: gambling, circular transfers, or overdue bill penalties.",
-        expected_output="A Risk Assessment report.",
+        description="Audit the provided transactional data specifically for risk markers: gaming/gambling transactions, repetitive circular transfers, or late-payment penalties.",
+        expected_output="A comprehensive Risk Assessment report highlighting critical vulnerabilities or anomalies.",
         agent=risk_agent
     )
 
     t3 = Task(
-        description="""Generate the FINAL Underwriting Report:
+        description="""Generate the FINAL Underwriting Report by combining the findings.
+        The report must be meticulously formatted and structured as follows:
         1. Executive Summary
-        2. Financial Health Score
-        3. Risk Assessment Score
+        2. Financial Health Score Analysis
+        3. Risk Assessment Breakdown
         4. Improvement Roadmap
-        5. FINAL_SCORE: [300-900] (MUST include this tag).""",
-        expected_output="Professional Markdown Report ending with FINAL_SCORE: XXX.",
+        5. FINAL_SCORE: [300-900] (You MUST append this exact phrase at the very end, e.g., FINAL_SCORE: 720)""",
+        expected_output="A professional Markdown report concluding with the absolute string 'FINAL_SCORE: XXX'.",
         agent=underwriter,
         context=[t1, t2]
     )
